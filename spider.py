@@ -30,9 +30,13 @@ def img_download(url):
         temp_size = 0
     headers = {'Range': 'bytes=%d-' % temp_size}
     r = requests.get(url, stream=True, verify=False, headers=headers)
+    while r.status_code==503:
+        r = requests.get(url, stream=True, verify=False, headers=headers)
     if (r.status_code == 404):
         url = url[:-4] + '.png'
         r = requests.get(url, stream=True, verify=False, headers=headers)
+        while r.status_code == 503:
+            r = requests.get(url, stream=True, verify=False, headers=headers)
     with open('img/' + url[-10:], "ab") as f:
         for chunk in r.iter_content(chunk_size=128):
             if chunk:
