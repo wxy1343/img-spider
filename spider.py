@@ -138,7 +138,9 @@ def Retry():
             Retry()
         else:
             print('\n下载失败')
-            return
+            print('感谢您的使用！')
+            input('按Enter键退出')
+            exit()
     print('\n下载完成')
     end_time = time.time()
     print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
