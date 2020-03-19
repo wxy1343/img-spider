@@ -30,7 +30,7 @@ def img_download(url):
         temp_size = 0
     headers = {'Range': 'bytes=%d-' % temp_size}
     r = requests.get(url, stream=True, verify=False, headers=headers)
-    while r.status_code==503:
+    while r.status_code == 503:
         r = requests.get(url, stream=True, verify=False, headers=headers)
     if (r.status_code == 404):
         url = url[:-4] + '.png'
@@ -83,22 +83,37 @@ def main():
     global end_time
     pool = ThreadPool(threads)
     while True:
-        搜索关键词 = input('请输入搜索关键词：')
+        搜索关键词 = input('请输入搜索关键词：').strip()
         if 搜索关键词 != '':
             break
         else:
             print('\033[0;37;41m关键词不能为空！\033[0m')
+    开始页数 = 0
     while True:
-        页数 = input('请输入爬取页数：')
-        if re.match('[0-9]{1,}', 页数) != None:
+        页数 = input('请输入爬取页数：').strip()
+        if re.match('^\d+$', 页数) != None:
             break
         elif 页数 == '':
             页数 = 1
             break
+        elif re.match('^\d+(\s+|,+|-+)\d+$', 页数) != None:
+            if (',' in 页数):
+                开始页数 = 页数.split(',')[0]
+                页数 = 页数.split(',')[-1]
+            if (' ' in 页数):
+                开始页数 = 页数.split()[0]
+                页数 = 页数.split()[-1]
+            if ('-' in 页数):
+                开始页数 = 页数.split('-')[0]
+                页数 = 页数.split('-')[-1]
+            开始页数 = int(开始页数) - 1
+            break
         else:
             print('\033[0;37;41m你的输入非法，请重新输入！\033[0m')
+    页数 = int(页数)
+    开始页数 = int(开始页数)
     start_time = time.time()
-    for i in range(int(页数)):
+    for i in range(开始页数, 页数):
         url = 'https://wallhaven.cc/search?q=' + 搜索关键词 + '&page=' + str(i + 1)
         print('正在爬取第%d页...' % (i + 1))
         req = Req()
