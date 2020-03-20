@@ -84,15 +84,15 @@ def init():
 
 def parse(url, 开始页数, 页数):
     for i in range(开始页数, 页数):
-        url = url + 'page=' + str(i + 1)
+        urls = url + 'page=' + str(i + 1)
         print('正在爬取第%d页...' % (i + 1))
         req = Req()
-        response = req.get(url)
+        response = req.get(urls)
         soup = BeautifulSoup(response.text, features='lxml')
         for j in soup.find_all('figure'):
-            url = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
+            urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
                 'data-wallpaper-id'] + '.jpg'
-            url_list.append(url)
+            url_list.append(urls)
         print('第%d页爬取成功' % (i + 1))
 
 
