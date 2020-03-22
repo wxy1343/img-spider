@@ -15,14 +15,15 @@ url_list = []
 url_lists = []
 favorites_url_list = []
 favorites_index = 0
-threads = 100
+thread = True
+threads_num = 100
 retry = True
 retry_max = 2
 retry_num = 0
-pool = ThreadPool(threads)
+output = False
+pool = ThreadPool(threads_num)
 start_time = 0
 end_time = 0
-page_num = 0
 
 
 def img_download(args):
@@ -53,33 +54,46 @@ def img_download(args):
                 temp_size += len(chunk)
                 f.write(chunk)
                 f.flush()
-        count += 1
-        done = int(50 * count / sum)
-        char = '╱╲'
-        sys.stdout.write("\r\033[0;37;42m    %s下载进度：%d%%|%s%s| %d/%d\033[0m" % (
-            char[count % 2], 100 * count / sum, '█' * done, ' ' * (50 - done), count, sum))
-        sys.stdout.flush()
+    progress_bar('下载进度', sum)
+
+
+def progress_bar(text, sum):
+    global count
+    count += 1
+    done = int(50 * count / sum)
+    char = '╱╲'
+    sys.stdout.write("\r\033[0;37;42m    %s%s：%d%%|%s%s| %d/%d\033[0m" % (
+        char[count % 2], text, 100 * count / sum, '█' * done, ' ' * (50 - done), count, sum))
+    sys.stdout.flush()
 
 
 def init():
     os.system('title img-spider @吾爱破解 wxy1343')
     print('欢迎使用！\n前往数据源：https://wallhaven.cc 下载更多精彩图片！')
     configdir = 'config.ini'
-    global threads
+    global thread
+    global threads_num
     global retry
     global retry_max
+    global output
     if not os.path.exists(configdir):
         f = open(configdir, 'a')
         f.close()
         cf = Config(configdir, '配置')
-        cf.Add('配置', 'threads', str(threads))
+        cf.Add('配置', 'thread', str(thread))
+        cf.Add('配置', 'threads_num', str(threads_num))
         cf.Add('配置', 'retry', str(retry))
         cf.Add('配置', 'retry_max', str(retry_max))
+        cf.Add('配置', 'output', str(output))
     else:
         cf = Config(configdir)
-        threads = cf.GetInt('配置', 'threads')
+        thread = cf.GetBool('配置', 'thread')
+        threads_num = cf.GetInt('配置', 'threads_num')
         retry = cf.GetBool('配置', 'retry')
         retry_max = cf.GetInt('配置', 'retry_max')
+        output = cf.GetBool('配置', 'output')
+    if not thread:
+        threads_num = 1
 
 
 def parse(url, 开始页数, 页数):
@@ -92,8 +106,21 @@ def parse(url, 开始页数, 页数):
         for j in soup.find_all('figure'):
             urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
                 'data-wallpaper-id'] + '.jpg'
-            url_list.append(urls)
+            if urls not in url_list:
+                url_list.append(urls)
         print('第%d页爬取成功' % (i + 1))
+
+
+def parse_mul(url):
+    req = Req()
+    response = req.get(url)
+    soup = BeautifulSoup(response.text, features='lxml')
+    for j in soup.find_all('figure'):
+        urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
+            'data-wallpaper-id'] + '.jpg'
+        if urls not in url_list:
+            url_list.append(urls)
+    progress_bar('爬取进度', sum)
 
 
 def parse_favorites(url):
@@ -170,12 +197,31 @@ def favorites(name, url):
     global count
     global retry_num
     开始页数, 页数 = page()
+    url_lists = []
+    for i in range(开始页数, 页数):
+        url_lists.append(url + 'page=' + str(i + 1))
+    sum = 页数 - 开始页数
+    print('开始爬取...')
     start_time = time.time()
-    parse(url, 开始页数, 页数)
+    count = 0
+    retry_num = 0
+
+    @Retry
+    def spider():
+        if thread:
+            pool.map(parse_mul, url_lists)
+            print()
+        else:
+            parse(url, 开始页数, 页数)
+
     url_lists = [(name, url) for url in url_list]
     sum = len(url_list)
     if (sum == 0):
         print('\033[0;37;41m"%s"为空,正在爬取下一个！\033[0m' % name)
+        return
+    print('爬取完毕')
+    if output:
+        to_txt(url_list)
         return
     if not os.path.exists('img/' + name + '/'):
         os.mkdir('img/' + name + '/')
@@ -183,6 +229,8 @@ def favorites(name, url):
     print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
     print('开始下载')
     start_time = time.time()
+    count = 0
+    retry_num = 0
 
     @Retry
     def download():
@@ -191,6 +239,55 @@ def favorites(name, url):
     print('\n下载完成')
     end_time = time.time()
     print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+
+
+def read_txt(path):
+    list = []
+    with open(path, 'r') as f:
+        for i in f.readlines():
+            if i != '':
+                list.append(i.strip().replace('\n', ''))
+        return list
+
+
+def to_txt(list):
+    txt = ''
+    for i in list:
+        txt += i + '\n'
+    txt = txt[:-1]
+    if not os.path.exists('output'):
+        os.mkdir('output')
+    with open('output\\' + time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime()) + '.txt', 'w') as f:
+        f.write(txt)
+
+
+def txt_spider():
+    global sum
+    global count
+    global retry_num
+    path = input('请输入文本路径：')
+    name = path.split('\\')[-1].split('.')[0]
+    if not os.path.exists('img/' + name + '/'):
+        os.mkdir('img/' + name + '/')
+    url_list = read_txt(path)
+    url_list = list(set(url_list))
+    url_list = [(name, url) for url in url_list]
+    print('开始下载')
+    start_time = time.time()
+    sum = len(url_list)
+    count = 0
+    retry_num = 0
+
+    @Retry
+    def download():
+        pool.map(img_download, url_list)
+        print()
+
+    print('下载完成')
+    end_time = time.time()
+    print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+    print('感谢您的使用！')
+    input('按Enter键退出')
 
 
 def main():
@@ -206,11 +303,11 @@ def main():
     global favorites_url_list
     global favorites_index
     global count
-    global page_num
-    pool = ThreadPool(threads)
+    global retry_num
+    pool = ThreadPool(threads_num)
     name = ''
     while True:
-        print('1.搜索关键词\n2.最新\n3.排行榜\n4.随机\n5.自定义')
+        print('1.搜索关键词\n2.最新\n3.排行榜\n4.随机\n5.自定义\n6.文本')
         序号 = input('请输入序号：')
         if 序号 == '1':
             while True:
@@ -257,6 +354,9 @@ def main():
                     break
                 print('\033[0;37;41m你输入的网址有误，请重新输入！\033[0m')
             break
+        elif 序号 == '6':
+            txt_spider()
+            return
         else:
             print('\033[0;37;41m请输入正确的序号！\033[0m')
             continue
@@ -272,32 +372,53 @@ def main():
         for i in favorites_url_list:
             name, url = i
             print('正在爬取第' + str(favorites_index + 1) + '个：' + name)
-            page_num = 页数
             if (favorites_index < 页数 + 1):
                 favorites(name, url)
             url_list = []
             count = 0
             favorites_index += 1
     else:
+        url_lists = []
+        for i in range(开始页数, 页数):
+            url_lists.append(url + 'page=' + str(i + 1))
+        sum = 页数 - 开始页数
+        print('开始爬取...')
         start_time = time.time()
-        parse(url, 开始页数, 页数)
+        count = 0
+        retry_num = 0
+
+        @Retry
+        def spider():
+            if thread:
+                pool.map(parse_mul, url_lists)
+                print()
+            else:
+                parse(url, 开始页数, 页数)
+
         sum = len(url_list)
         if (sum == 0):
             print('\033[0;37;41m没有匹配的结果，换个关键词试试吧！\033[0m')
             main()
         end_time = time.time()
+        print('爬取完毕')
         print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+        if output:
+            to_txt(url_list)
+            exit()
         url_lists = [(name, url) for url in url_list]
         print('开始下载')
         if not os.path.exists('img/' + name + '/'):
             os.mkdir('img/' + name + '/')
         start_time = time.time()
+        count = 0
+        retry_num = 0
 
         @Retry
         def download():
             pool.map(img_download, url_lists)
+            print()
 
-        print('\n下载完成')
+        print('下载完成')
         end_time = time.time()
         print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
     print('感谢您的使用！')
