@@ -242,8 +242,8 @@ def main():
             while True:
                 url = input('请输入自定义网址：').strip()
                 if re.match('^(https://|http://|)wallhaven.cc($|/.*\?|/.*$|/)', url) != None:
-                    if '?' in url:
-                        url = url.split('?')[0] + '?'
+                    if '&' in url:
+                        url = url.split('&')[0] + '&'
                     elif re.match('.*favorites($|/$)', url):
                         start_time = time.time()
                         print('正在爬取收藏中...')
@@ -260,6 +260,9 @@ def main():
         else:
             print('\033[0;37;41m请输入正确的序号！\033[0m')
             continue
+    name = name.replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"',
+                                                                                                              '').replace(
+        '<', '').replace('>', '').replace('|', '')
     开始页数, 页数 = page()
     if not os.path.exists('img'):
         os.mkdir('img')
