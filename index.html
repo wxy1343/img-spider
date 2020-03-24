@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>img-spider @吾爱破解 wxy1343</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #title_bar {
+            margin: 10px auto;
+            width: 1015px;
+            overflow: auto;
+            zoom: 1;
+        }
+
+        #title_bar li {
+            list-style: none;
+            background: #1e6cff;
+            float: left;
+            width: 143px;
+            border: 1px solid white;
+            text-align: center;
+            font-size: 20px;
+            border-radius: 5px;
+        }
+
+        #title_bar a {
+            text-decoration: none;
+            color: white;
+            text-shadow: 1px 1px 1px;
+            box-shadow: 1px 1px 5px red;
+            border-radius: 5px;
+        }
+
+        #box {
+            margin: 0 auto;
+            width: 1015px;
+        }
+
+        #box div {
+            width: 1015px;
+            height: 275px;
+            background: #cccccc;
+            border-radius: 10px;
+            box-shadow: 1px 1px 5px;
+            display: none;
+            text-align: center;
+        }
+
+        #box .active {
+            display: block;
+        }
+
+        #box .progress {
+            /*display: none;*/
+            margin-top: 20px;
+        }
+
+        #box .spider {
+            width: 60px;
+            height: 40px;
+            margin-top: 30px;
+            border-radius: 5px;
+            box-shadow: 1px 1px 1px;
+        }
+
+        #box .download {
+            width: 60px;
+            height: 40px;
+            margin-top: 30px;
+            border-radius: 5px;
+            box-shadow: 1px 1px 1px;
+        }
+
+        .text {
+            border-radius: 5px;
+            box-shadow: 1px 1px 1px;
+            width: 500px;
+            height: 40px;
+            margin-top: 50px;
+        }
+
+        #about a {
+            text-decoration: none;
+            color: white;
+        }
+    </style>
+    <script src="jquery-3.4.1.js"></script>
+    <script>
+        timer_key_spider = null
+        key_spider_finish = false
+        timer_key_download = null
+        s1 = {
+            label: '#keyword',
+            timer: null,
+            finish: false
+        }
+        s2 = {
+            label: '#latest',
+            timer: null,
+            finish: false
+        }
+        s3 = {
+            label: '#toplist',
+            timer: null,
+            finish: false
+        }
+        s4 = {
+            label: '#random',
+            timer: null,
+            finish: false
+        }
+        s5 = {
+            label: '#custom',
+            timer: null,
+            finish: false
+        }
+        s6 = {
+            label: '#text',
+            timer: null,
+            finish: false
+        }
+
+        function get_set() {
+            $.ajax({
+                type: "POST",
+                url: 'set',
+                dataType: "json",
+                success: function (data) {
+                    $('#set #thread').prop('checked', data['thread'])
+                    $('#set #threads_num').val(data['threads_num'])
+                    $('#set #retry').prop('checked', data['retry'])
+                    $('#set #retry_max').val(data['retry_max'])
+                    $('#set #output').prop('checked', data['output'])
+                }
+            })
+        }
+
+        function option() {
+            option_json = {
+                thread: $('#set #thread').is(':checked'),
+                threads_num: $('#set #threads_num').val(),
+                retry: $('#set #retry').is(':checked'),
+                retry_max: $('#set #retry_max').val(),
+                output: $('#set #output').is(':checked')
+            }
+            console.log(option_json);
+            $.ajax({
+                type: "POST",
+                url: 'option',
+                dataType: "json",
+                data: option_json,
+                success: function (data) {
+                    if (data['msg'] == 'ok') {
+                        alert('保存成功')
+                    }
+                },
+                error: function () {
+                    alert('保存失败')
+                }
+            })
+        }
+
+        function spider(obj) {
+            if (obj.key == '') {
+                alert('关键词不能为空')
+            } else if (obj.start <= 0 || obj.end <= 0) {
+                alert('页数不能小于等于0')
+            } else if (obj.start > obj.end) {
+                alert('结束页数不能大于起始页数')
+            } else if (obj.timer == null) {
+                obj.finish = false
+                $.ajax({
+                    type: 'POST',
+                    url: obj.uri,
+                    dataType: 'json',
+                    data: obj.data,
+                    success: function () {
+                        $('#keyword .info').html('正在爬取...')
+                        obj.timer = setInterval(function () {
+                            $.ajax({
+                                type: 'POST',
+                                url: obj.uri + '.status',
+                                dataType: 'json',
+                                success: function (data) {
+                                    obj.sum = data['sum']
+                                    obj.count = data['count']
+                                    if (obj.sum != '0') {
+                                        obj.percent = ((parseFloat(obj.count) / parseFloat(obj.sum)) * 100).toFixed(1)
+                                        $(obj.label + ' .info').html(obj.count + '/' + obj.sum + ' 正在爬取... ' + obj.percent.toString() + '%')
+                                        $(obj.label + ' .progress').val(obj.percent)
+                                        console.log(obj.percent)
+                                        if (obj.percent == 100) {
+                                            clearInterval(obj.timer)
+                                            $(obj.label + ' .info').html('爬取完毕')
+                                            obj.timer = null
+                                            obj.finish = true
+                                        }
+                                    }
+                                }
+                            })
+                        }, 100)
+                    },
+                    error: function () {
+                        alert('爬取失败')
+                    }
+                })
+            }
+        }
+
+        function download(obj) {
+            if (obj.finish) {
+                if (obj.timer == null) {
+                    $.ajax({
+                        type: 'POST',
+                        url: obj.uri + '.download',
+                        dataType: 'json',
+                        success: function (data) {
+                            if (data['msg'] == 'no match') {
+                                alert('没有匹配的结果，换个关键词试试吧！')
+                            } else {
+                                $(obj.label + ' .info').html('正在下载...')
+                                obj.timer = setInterval(function () {
+                                    $.ajax({
+                                        type: 'POST',
+                                        url: obj.uri + '.download.status',
+                                        dataType: 'json',
+                                        success: function (data) {
+                                            obj.sum = data['sum']
+                                            obj.count = data['count']
+                                            if (obj.sum != '0') {
+                                                obj.percent = ((parseFloat(obj.count) / parseFloat(obj.sum)) * 100).toFixed(1)
+                                                $(obj.label + ' .info').html(obj.count + '/' + obj.sum + ' 正在下载... ' + obj.percent.toString() + '%')
+                                                $(obj.label + ' .progress').val(obj.percent)
+                                                console.log(obj.percent)
+                                                if (obj.percent == 100) {
+                                                    clearInterval(obj.timer)
+                                                    $(obj.label + ' .info').html('下载完毕')
+                                                    obj.timer = null
+                                                }
+                                            }
+                                        }
+                                    })
+                                }, 100)
+                            }
+
+                        },
+                        error: function () {
+                            alert('下载失败')
+                        }
+                    })
+                } else {
+                    alert('正在下载')
+                }
+            } else {
+                alert('请先爬取')
+            }
+        }
+
+        $(function () {
+            get_set()
+            $('#title_bar li:first').css('background', 'red')
+            $('#title_bar a').mouseover(function () {
+                $('#box div').removeClass('active')
+                $('#box div').eq($('#title_bar a').index(this)).addClass('active')
+            })
+
+            $('#title_bar li').mouseover(function () {
+                $('#title_bar li').css('background', '#1e6cff')
+                $(this).css('background', 'red')
+            })
+
+            $('#keyword .spider').click(function () {
+                s1.key = $(s1.label + ' .text').val()
+                s1.start = $(s1.label + ' .start_page').val()
+                s1.end = $(s1.label + ' .end_page').val()
+                s1.data = {key: s1.key, start: s1.start, end: s1.end}
+                s1.uri = '1'
+                spider(s1)
+            })
+
+            $('#keyword .download').click(function () {
+                download(s1)
+            })
+
+            $('#latest .spider').click(function () {
+                s2.start = $(s2.label + ' .start_page').val()
+                s2.end = $(s2.label + ' .end_page').val()
+                s2.data = {start: s2.start, end: s2.end}
+                s2.uri = '2'
+                spider(s2)
+            })
+
+            $('#latest .download').click(function () {
+                download(s2)
+            })
+
+            $('#toplist .spider').click(function () {
+                s3.start = $(s3.label + ' .start_page').val()
+                s3.end = $(s3.label + ' .end_page').val()
+                s3.data = {start: s3.start, end: s3.end}
+                s3.uri = '3'
+                spider(s3)
+            })
+
+            $('#toplist .download').click(function () {
+                download(s3)
+            })
+
+            $('#random .spider').click(function () {
+                s4.start = $(s4.label + ' .start_page').val()
+                s4.end = $(s4.label + ' .end_page').val()
+                s4.uri = '4'
+                if ($(s4.label + ' .text').val() == '') {
+                    str = 'abcdefghijklmnopqrstuvwxyz9876543210'
+                    rand = '', i = 0, l = str.length
+                    for (i = 0; i < 5; i++) {
+                        rand += str.charAt(Math.floor(Math.random() * l))
+                    }
+                    $(s4.label + ' .text').val(rand)
+                    s4.rand = rand
+                }
+                s4.data = {rand: s4.rand, start: s4.start, end: s4.end}
+                spider(s4)
+            })
+
+            $('#random .download').click(function () {
+                download(s4)
+            })
+
+            $('#custom .spider').click(function () {
+                s5.url = $(s5.label + ' .text').val()
+                reg = /(http|https):\/\/wallhaven.cc/;
+                if (reg.test(s5.url)) {
+                    s5.url = s5.url.split('&')[0]
+                    s5.start = $(s5.label + ' .start_page').val()
+                    s5.end = $(s5.label + ' .end_page').val()
+                    s5.uri = '5'
+                    s5.data = {url: s5.url, start: s5.start, end: s5.end}
+                    spider(s5)
+                } else {
+                    alert('你输入的网址有误')
+                }
+            })
+
+            $('#custom .download').click(function () {
+                download(s5)
+            })
+
+            $('#text .download').click(function () {
+                s6.path = $(s6.label + ' .text').val()
+                s6.start = $(s6.label + ' .start_page').val()
+                s6.end = $(s6.label + ' .end_page').val()
+                s6.data = {path: s6.path, start: s6.start, end: s6.end}
+                s6.uri = '6'
+                $.ajax({
+                    type: 'POST',
+                    url: s6.uri + '.download',
+                    dataType: 'json',
+                    data: s6.data,
+                    success: function (data) {
+                        if (data['msg'] == 'IOError') {
+                            alert('读取文件失败')
+                        } else if (data['msg'] == 'no content') {
+                            alert('文件没有内容')
+                        } else if (s6.timer == null) {
+                            s6.timer = setInterval(function () {
+                                $.ajax({
+                                    type: 'POST',
+                                    url: s6.uri + '.download.status',
+                                    dataType: 'json',
+                                    success: function (data) {
+                                        s6.sum = data['sum']
+                                        s6.count = data['count']
+                                        if (s6.sum != '0') {
+                                            s6.percent = ((parseFloat(s6.count) / parseFloat(s6.sum)) * 100).toFixed(1)
+                                            $(s6.label + ' .info').html(s6.count + '/' + s6.sum + ' 正在下载... ' + s6.percent.toString() + '%')
+                                            $(s6.label + ' .progress').val(s6.percent)
+                                            console.log(s6.percent)
+                                            if (s6.percent == 100) {
+                                                clearInterval(s6.timer)
+                                                $(s6.label + ' .info').html('下载完毕')
+                                                s6.timer = null
+                                            }
+                                        }
+                                    }
+                                })
+                            }, 100)
+                        }
+                    },
+                    error: function () {
+                        alert('下载失败')
+                    }
+                })
+            })
+        })
+    </script>
+</head>
+<body>
+<ul id="title_bar">
+    <a href="javascript:;">
+        <li>搜索关键词</li>
+    </a>
+    <a href="javascript:;">
+        <li>最新</li>
+    </a>
+    <a href="javascript:;">
+        <li>排行榜</li>
+    </a>
+    <a href="javascript:;">
+        <li>随机</li>
+    </a>
+    <a href="javascript:;">
+        <li>自定义</li>
+    </a>
+    <a href="javascript:;">
+        <li>文本</li>
+    </a>
+    <a href="javascript:;">
+        <li>设置</li>
+    </a>
+</ul>
+<div id="box">
+    <div class="active" id="keyword">
+        <input type="text" placeholder="请输入关键词" class="text">
+        <br>
+        <br>
+        开始页数：
+        <input type="number" class="start_page" min="1" value="1">
+        结束页数：
+        <input type="number" class="end_page" min="1" value="1">
+        <br>
+        <input type="button" value="开始爬取" class="spider">
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="latest">
+        <br>
+        <br>
+        开始页数：
+        <input type="number" class="start_page" min="1" value="1">
+        结束页数：
+        <input type="number" class="end_page" min="1" value="1">
+        <br>
+        <input type="button" value="开始爬取" class="spider">
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="toplist">
+        <br>
+        <br>
+        开始页数：
+        <input type="number" class="start_page" min="1" value="1">
+        结束页数：
+        <input type="number" class="end_page" min="1" value="1">
+        <br>
+        <input type="button" value="开始爬取" class="spider">
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="random">
+        <input type="text" placeholder="请输入种子，留空随机" class="text">
+        <br>
+        <br>
+        开始页数：
+        <input type="number" class="start_page" min="1" value="1">
+        结束页数：
+        <input type="number" class="end_page" min="1" value="1">
+        <br>
+        <input type="button" value="开始爬取" class="spider">
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="custom">
+        <input type="text" placeholder="请输入网址" class="text">
+        <br>
+        <br>
+        开始页数：
+        <input type="number" class="start_page" min="1" value="1">
+        结束页数：
+        <input type="number" class="end_page" min="1" value="1">
+        <br>
+        <input type="button" value="开始爬取" class="spider">
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="text">
+        <br>
+        <br>
+        <input type="text" placeholder="请输入文件路径" class="text">
+        <br>
+        <input type="button" value="开始下载" class="download">
+        <br>
+        <progress value="0" max="100" class="progress"></progress>
+        <p class="info"></p>
+    </div>
+    <div id="set">
+        <span>多线程</span>
+        <input type="checkbox" id="thread">
+        <br>
+        <span>线程数</span>
+        <input type="number" min="1" id="threads_num">
+        <br>
+        <span>是否重试</span>
+        <input type="checkbox" id="retry">
+        <br>
+        <span>重试次数</span>
+        <input type="number" min="0" id="retry_max">
+        <br>
+        <span>是否输出文本</span>
+        <input type="checkbox" id="output">
+        <br>
+        <input type="button" value="刷新" onclick="get_set()">
+        <input type="button" value="保存" onclick="option()">
+        <br>
+        <p id="about"><a href="https://github.com/1343890272/img-spider" target="_blank">img-spider</a> <a
+                href="https://www.52pojie.cn/thread-1130617-7-1.html" target="_blank">@吾爱破解</a> <a
+                href="https://www.52pojie.cn/home.php?mod=space&uid=1380912" target="_blank">wxy1343</a><br>前往数据源:<a
+                href="https://wallhaven.cc"> https://wallhaven.cc</a>下载更多精彩图片！</p>
+    </div>
+</div>
+</body>
+</html>
