@@ -183,7 +183,7 @@ def Retry(f):
                 print('\n下载失败')
                 print('感谢您的使用！')
                 input('按Enter键退出')
-                exit()
+                sys.exit()
         else:
             break
 
@@ -246,14 +246,14 @@ def read_txt(path):
     with open(path, 'r') as f:
         for i in f.readlines():
             if i != '':
-                list.append(i.strip().replace('\n', ''))
+                list.append(i.strip().replace('\r\n', ''))
         return list
 
 
 def to_txt(list):
     txt = ''
     for i in list:
-        txt += i + '\n'
+        txt += i + '\r\n'
     txt = txt[:-1]
     if not os.path.exists('output'):
         os.mkdir('output')
@@ -339,8 +339,8 @@ def main():
             while True:
                 url = input('请输入自定义网址：').strip()
                 if re.match('^(https://|http://|)wallhaven.cc($|/.*\?|/.*$|/)', url) != None:
-                    if '&' in url:
-                        url = url.split('&')[0] + '&'
+                    if '&page=' in url:
+                        url = url.split('&page=')[0] + '&'
                     elif re.match('.*favorites($|/$)', url):
                         start_time = time.time()
                         print('正在爬取收藏中...')
@@ -404,7 +404,9 @@ def main():
         print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
         if output:
             to_txt(url_list)
-            exit()
+            print('感谢您的使用！')
+            input('按Enter键退出')
+            sys.exit()
         url_lists = [(name, url) for url in url_list]
         print('开始下载')
         if not os.path.exists('img/' + name + '/'):
