@@ -90,9 +90,6 @@
     </style>
     <script src="jquery-3.4.1.js"></script>
     <script>
-        timer_key_spider = null
-        key_spider_finish = false
-        timer_key_download = null
         s1 = {
             label: '#keyword',
             timer: null,
@@ -335,7 +332,7 @@
                 s5.url = $(s5.label + ' .text').val()
                 reg = /(http|https):\/\/wallhaven.cc/;
                 if (reg.test(s5.url)) {
-                    s5.url = s5.url.split('&')[0]
+                    s5.url = s5.url.split('&page=')[0]
                     s5.start = $(s5.label + ' .start_page').val()
                     s5.end = $(s5.label + ' .end_page').val()
                     s5.uri = '5'
