@@ -24,36 +24,57 @@ output = False
 pool = ThreadPool(threads_num)
 start_time = 0
 end_time = 0
+time_out_retry_num = 0
+time_out = 10
 
 
 def img_download(args):
+    global time_out_retry_num
+    global retry_num
     name, url = args
     if name != '':
         path = 'img/' + name + '/'
     else:
         path = 'img/'
-    global count
-    if os.path.exists(path + url[-10:]) == True:
-        temp_size = os.path.getsize(path + url[-10:])
-    elif os.path.exists(path + (url[:-4] + '.png')[-10:]) == True:
-        temp_size = os.path.getsize(path + (url[:-4] + '.png')[-10:])
-    else:
-        temp_size = 0
-    headers = {'Range': 'bytes=%d-' % temp_size}
-    r = requests.get(url, stream=True, verify=False, headers=headers)
-    while r.status_code == 503:
-        r = requests.get(url, stream=True, verify=False, headers=headers)
-    if (r.status_code == 404):
-        url = url[:-4] + '.png'
-        r = requests.get(url, stream=True, verify=False, headers=headers)
-        while r.status_code == 503:
-            r = requests.get(url, stream=True, verify=False, headers=headers)
-    with open(path + url[-10:], "ab") as f:
-        for chunk in r.iter_content(chunk_size=128):
-            if chunk:
-                temp_size += len(chunk)
-                f.write(chunk)
-                f.flush()
+    while True:
+        try:
+            if os.path.exists(path + url[-10:]) == True:
+                temp_size = os.path.getsize(path + url[-10:])
+            elif os.path.exists(path + (url[:-4] + '.png')[-10:]) == True:
+                temp_size = os.path.getsize(path + (url[:-4] + '.png')[-10:])
+            else:
+                temp_size = 0
+            headers = {'Range': 'bytes=%d-' % temp_size}
+            r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            while r.status_code == 503:
+                r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            if (r.status_code == 404):
+                url = url[:-4] + '.png'
+                r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+                while r.status_code == 503:
+                    r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            with open(path + url[-10:], "ab") as f:
+                for chunk in r.iter_content(chunk_size=128):
+                    if chunk:
+                        temp_size += len(chunk)
+                        f.write(chunk)
+                        f.flush()
+        except requests.exceptions.ReadTimeout:
+            time_out_retry_num += 1
+            # print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
+            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (retry_num < retry_max)):
+                retry_num += 1
+                # print('第%d次重试' % retry_num)
+                # count = 0
+            else:
+                print('\n下载失败')
+                print('感谢您的使用！')
+                input('按Enter键退出')
+                sys.exit()
+        else:
+            break
     progress_bar('下载进度', sum)
 
 
@@ -76,6 +97,7 @@ def init():
     global retry
     global retry_max
     global output
+    global time_out
     if not os.path.exists(configdir):
         f = open(configdir, 'a')
         f.close()
@@ -85,6 +107,7 @@ def init():
         cf.Add('配置', 'retry', str(retry))
         cf.Add('配置', 'retry_max', str(retry_max))
         cf.Add('配置', 'output', str(output))
+        cf.Add('配置', 'time_out', str(time_out))
     else:
         cf = Config(configdir)
         thread = cf.GetBool('配置', 'thread')
@@ -92,6 +115,7 @@ def init():
         retry = cf.GetBool('配置', 'retry')
         retry_max = cf.GetInt('配置', 'retry_max')
         output = cf.GetBool('配置', 'output')
+        time_out = cf.GetInt('配置', 'time_out')
     if not thread:
         threads_num = 1
 
@@ -112,15 +136,33 @@ def parse(url, 开始页数, 页数):
 
 
 def parse_mul(url):
+    global retry_num
     req = Req()
-    response = req.get(url)
-    soup = BeautifulSoup(response.text, features='lxml')
-    for j in soup.find_all('figure'):
-        urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
-            'data-wallpaper-id'] + '.jpg'
-        if urls not in url_list:
-            url_list.append(urls)
-    progress_bar('爬取进度', sum)
+    while True:
+        try:
+            response = req.get(url)
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
+            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (retry_num < retry_max)):
+                retry_num += 1
+                # print('第%d次重试' % retry_num)
+            else:
+                print('\n爬取失败')
+                print('感谢您的使用！')
+                input('按Enter键退出')
+                sys.exit()
+        else:
+            if response.status_code != 200:
+                parse_mul(url)
+                return
+            soup = BeautifulSoup(response.text, features='lxml')
+            for j in soup.find_all('figure'):
+                urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
+                    'data-wallpaper-id'] + '.jpg'
+                if urls not in url_list:
+                    url_list.append(urls)
+            progress_bar('爬取进度', sum)
+            break
 
 
 def parse_favorites(url):
@@ -205,15 +247,11 @@ def favorites(name, url):
     start_time = time.time()
     count = 0
     retry_num = 0
-
-    @Retry
-    def spider():
-        if thread:
-            pool.map(parse_mul, url_lists)
-            print()
-        else:
-            parse(url, 开始页数, 页数)
-
+    if thread:
+        pool.map(parse_mul, url_lists)
+        print()
+    else:
+        parse(url, 开始页数, 页数)
     url_lists = [(name, url) for url in url_list]
     sum = len(url_list)
     if (sum == 0):
@@ -231,11 +269,7 @@ def favorites(name, url):
     start_time = time.time()
     count = 0
     retry_num = 0
-
-    @Retry
-    def download():
-        pool.map(img_download, url_lists)
-
+    pool.map(img_download, url_lists)
     print('\n下载完成')
     end_time = time.time()
     print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
@@ -277,12 +311,8 @@ def txt_spider():
     sum = len(url_list)
     count = 0
     retry_num = 0
-
-    @Retry
-    def download():
-        pool.map(img_download, url_list)
-        print()
-
+    pool.map(img_download, url_list)
+    print()
     print('下载完成')
     end_time = time.time()
     print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
@@ -386,15 +416,11 @@ def main():
         start_time = time.time()
         count = 0
         retry_num = 0
-
-        @Retry
-        def spider():
-            if thread:
-                pool.map(parse_mul, url_lists)
-                print()
-            else:
-                parse(url, 开始页数, 页数)
-
+        if thread:
+            pool.map(parse_mul, url_lists)
+            print()
+        else:
+            parse(url, 开始页数, 页数)
         sum = len(url_list)
         if (sum == 0):
             print('\033[0;37;41m没有匹配的结果，换个关键词试试吧！\033[0m')
@@ -414,12 +440,8 @@ def main():
         start_time = time.time()
         count = 0
         retry_num = 0
-
-        @Retry
-        def download():
-            pool.map(img_download, url_lists)
-            print()
-
+        pool.map(img_download, url_lists)
+        print()
         print('下载完成')
         end_time = time.time()
         print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
