@@ -132,6 +132,7 @@
                     $('#set #retry').prop('checked', data['retry'])
                     $('#set #retry_max').val(data['retry_max'])
                     $('#set #output').prop('checked', data['output'])
+                    $('#set #time_out').val(data['time_out'])
                 }
             })
         }
@@ -142,7 +143,8 @@
                 threads_num: $('#set #threads_num').val(),
                 retry: $('#set #retry').is(':checked'),
                 retry_max: $('#set #retry_max').val(),
-                output: $('#set #output').is(':checked')
+                output: $('#set #output').is(':checked'),
+                time_out: $('#set #time_out').val()
             }
             console.log(option_json);
             $.ajax({
@@ -519,6 +521,9 @@
         <br>
         <span>是否输出文本</span>
         <input type="checkbox" id="output">
+        <br>
+        <span>超时重试时间</span>
+        <input type="number" id="time_out">
         <br>
         <input type="button" value="刷新" onclick="get_set()">
         <input type="button" value="保存" onclick="option()">
