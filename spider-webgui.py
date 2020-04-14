@@ -22,8 +22,10 @@ retry = True
 retry_max = 2
 retry_num = 0
 output = False
+time_out = 10
 sum = 0
 count = 0
+time_out_retry_num = 0
 s1 = None
 s2 = None
 s3 = None
@@ -42,14 +44,14 @@ def handle_client(client_socket):
         # print(request_data.decode())
         # print('*' * 10)
         method = request_data.decode().splitlines()[0].split()[0]
-        print(method)
+        # print(method)
         if method == 'GET':
             file_name = request_data.decode().splitlines()[0].split()[1]
             if file_name == '/':
                 file_name = 'index.html'
             else:
                 file_name = file_name[1:]
-            print(file_name)
+            # print(file_name)
             response_start_line = 'HTTP/1.1 200 OK\r\n'
             response_headers = 'Server: Python\r\n'
             try:
@@ -64,13 +66,13 @@ def handle_client(client_socket):
         elif method == 'POST':
             data_dict = {}
             uri = request_data.decode('utf-8').splitlines()[0].split()[1][1:]
-            print(uri)
+            # print(uri)
             if not request_data.decode('utf-8').splitlines()[-1] == '':
                 for i in request_data.decode('utf-8').splitlines()[-1].split('&'):
                     key = i.split('=')[0]
                     value = i.split('=')[1]
                     data_dict[key] = urllib.parse.unquote(value)
-                print(data_dict)
+                # print(data_dict)
                 # client_socket.send(json.dumps(data).encode())
             global thread
             global threads_num
@@ -79,6 +81,7 @@ def handle_client(client_socket):
             global output
             global sum
             global count
+            global time_out
             global s1
             global s2
             global s3
@@ -94,6 +97,7 @@ def handle_client(client_socket):
                 retry = data['retry'] = cf.GetBool('配置', 'retry')
                 retry_max = data['retry_max'] = cf.GetInt('配置', 'retry_max')
                 output = data['output'] = cf.GetBool('配置', 'output')
+                time_out = data['time_out'] = cf.GetInt('配置', 'time_out')
                 client_socket.send(json.dumps(data).encode())
             elif uri == 'option':
                 thread = str_to_bool(data_dict['thread'])
@@ -106,6 +110,8 @@ def handle_client(client_socket):
                 cf.Update('配置', 'retry_max', str(retry_max))
                 output = str_to_bool(data_dict['output'])
                 cf.Update('配置', 'output', str(output))
+                time_out = int(data_dict['time_out'])
+                cf.Update('配置', 'time_out', str(time_out))
                 data = {'msg': 'ok'}
                 client_socket.send(json.dumps(data).encode())
             elif uri == '1':
@@ -242,6 +248,7 @@ def init():
     global retry
     global retry_max
     global output
+    global time_out
     configdir = 'config.ini'
     if not os.path.exists(configdir):
         f = open(configdir, 'a')
@@ -252,6 +259,7 @@ def init():
         cf.Add('配置', 'retry', str(retry))
         cf.Add('配置', 'retry_max', str(retry_max))
         cf.Add('配置', 'output', str(output))
+        cf.Add('配置', 'time_out', str(time_out))
     else:
         cf = Config(configdir)
         thread = cf.GetBool('配置', 'thread')
@@ -259,6 +267,7 @@ def init():
         retry = cf.GetBool('配置', 'retry')
         retry_max = cf.GetInt('配置', 'retry_max')
         output = cf.GetBool('配置', 'output')
+        time_out = cf.GetInt('配置', 'time_out')
     if not thread:
         threads_num = 1
 
@@ -312,10 +321,7 @@ def txt_download(obj):
     url_lists = [(obj, url) for url in obj.url_list]
     obj.count = 0
     obj.retry_num = 0
-
-    @Retry_parameter(obj)
-    def download():
-        ThreadPool(threads_num).map(img_download, url_lists)
+    ThreadPool(threads_num).map(img_download, url_lists)
 
 
 def download(obj):
@@ -332,41 +338,52 @@ def download(obj):
         os.mkdir('img/' + obj.name + '/')
     obj.count = 0
     obj.retry_num = 0
-
-    @Retry_parameter(obj)
-    def download():
-        ThreadPool(threads_num).map(img_download, url_lists)
+    ThreadPool(threads_num).map(img_download, url_lists)
 
 
 def img_download(args):
+    global time_out_retry_num
+    global retry_num
     obj, url = args
     if obj.name != '':
         path = 'img/' + obj.name + '/'
     else:
         path = 'img/'
-    global count
-    if os.path.exists(path + url[-10:]) == True:
-        temp_size = os.path.getsize(path + url[-10:])
-    elif os.path.exists(path + (url[:-4] + '.png')[-10:]) == True:
-        temp_size = os.path.getsize(path + (url[:-4] + '.png')[-10:])
-    else:
-        temp_size = 0
-    headers = {'Range': 'bytes=%d-' % temp_size}
-    r = requests.get(url, stream=True, verify=False, headers=headers)
-    while r.status_code == 503:
-        r = requests.get(url, stream=True, verify=False, headers=headers)
-    if (r.status_code == 404):
-        url = url[:-4] + '.png'
-        r = requests.get(url, stream=True, verify=False, headers=headers)
-        while r.status_code == 503:
-            r = requests.get(url, stream=True, verify=False, headers=headers)
-    with open(path + url[-10:], "ab") as f:
-        for chunk in r.iter_content(chunk_size=128):
-            if chunk:
-                temp_size += len(chunk)
-                f.write(chunk)
-                f.flush()
-    progress_bar(obj)
+    while True:
+        try:
+            if os.path.exists(path + url[-10:]) == True:
+                temp_size = os.path.getsize(path + url[-10:])
+            elif os.path.exists(path + (url[:-4] + '.png')[-10:]) == True:
+                temp_size = os.path.getsize(path + (url[:-4] + '.png')[-10:])
+            else:
+                temp_size = 0
+            headers = {'Range': 'bytes=%d-' % temp_size}
+            r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            while r.status_code == 503:
+                r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            if (r.status_code == 404):
+                url = url[:-4] + '.png'
+                r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+                while r.status_code == 503:
+                    r = requests.get(url, stream=True, verify=False, headers=headers, timeout=time_out)
+            with open(path + url[-10:], "ab") as f:
+                for chunk in r.iter_content(chunk_size=128):
+                    if chunk:
+                        temp_size += len(chunk)
+                        f.write(chunk)
+                        f.flush()
+            progress_bar(obj, '下载进度')
+            break
+        except requests.exceptions.ReadTimeout:
+            time_out_retry_num += 1
+            # print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
+            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (retry_num < retry_max)):
+                retry_num += 1
+                # print('第%d次重试' % retry_num)
+            else:
+                print('\n下载失败')
 
 
 class Spider:
@@ -391,27 +408,39 @@ class Spider:
         self.sum = self.end_page - self.start_page
         self.count = 0
         self.retry_num = 0
-
-        @Retry_parameter(self)
-        def spider():
-            ThreadPool(threads_num).map(parse_mul, self.url_lists)
-            print()
+        ThreadPool(threads_num).map(parse_mul, self.url_lists)
+        print()
 
         if output:
             to_txt(self.url_list)
 
 
 def parse_mul(args):
+    global retry_num
     obj, url = args
     req = Req()
-    response = req.get(url)
-    soup = BeautifulSoup(response.text, features='lxml')
-    for j in soup.find_all('figure'):
-        urls = 'https://w.wallhaven.cc/full/' + j['data-wallpaper-id'][:2] + '/wallhaven-' + j[
-            'data-wallpaper-id'] + '.jpg'
-        if urls not in obj.url_list:
-            obj.url_list.append(urls)
-    progress_bar(obj)
+    while True:
+        try:
+            response = req.get(url)
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
+            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (retry_num < retry_max)):
+                retry_num += 1
+                # print('第%d次重试' % retry_num)
+            else:
+                print('\n爬取失败')
+        else:
+            if response.status_code != 200:
+                parse_mul(url)
+                return
+            soup = BeautifulSoup(response.text, features='lxml')
+            for i in soup.find_all('figure'):
+                img_id = i['data-wallpaper-id']
+                urls = 'https://w.wallhaven.cc/full/' + img_id[:2] + '/wallhaven-' + img_id + '.jpg'
+                if urls not in obj.url_list:
+                    obj.url_list.append(urls)
+            progress_bar(obj, '爬取进度')
+            break
 
 
 def Retry_parameter(obj):
@@ -433,12 +462,12 @@ def Retry_parameter(obj):
     return Retry
 
 
-def progress_bar(obj):
+def progress_bar(obj, text):
     obj.count += 1
     done = int(50 * obj.count / obj.sum)
     char = '╱╲'
     sys.stdout.write("\r\033[0;37;42m    %s%s：%d%%|%s%s| %d/%d\033[0m" % (
-        char[obj.count % 2], '进度', 100 * obj.count / obj.sum, '█' * done, ' ' * (50 - done), obj.count, obj.sum))
+        char[obj.count % 2], text, 100 * obj.count / obj.sum, '█' * done, ' ' * (50 - done), obj.count, obj.sum))
     sys.stdout.flush()
 
 
@@ -466,7 +495,7 @@ if __name__ == '__main__':
     s.listen()
     while True:
         client_socket, socket_address = s.accept()
-        print('*' * 10)
-        print('%s:%s' % socket_address)
+        # print('*' * 10)
+        # print('%s:%s' % socket_address)
         handle_client(client_socket)
         client_socket.close()
