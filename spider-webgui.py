@@ -19,12 +19,14 @@ from req import Req
 thread = True
 threads_num = 100
 retry = True
-retry_max = 2
+retry_max = 99999999
 retry_num = 0
 output = False
 time_out = 10
 sum = 0
 count = 0
+error_info = True
+spider_after_download = False
 time_out_retry_num = 0
 s1 = None
 s2 = None
@@ -66,7 +68,6 @@ def handle_client(client_socket):
         elif method == 'POST':
             data_dict = {}
             uri = request_data.decode('utf-8').splitlines()[0].split()[1][1:]
-            # print(uri)
             if not request_data.decode('utf-8').splitlines()[-1] == '':
                 for i in request_data.decode('utf-8').splitlines()[-1].split('&'):
                     key = i.split('=')[0]
@@ -82,6 +83,8 @@ def handle_client(client_socket):
             global sum
             global count
             global time_out
+            global error_info
+            global spider_after_download
             global s1
             global s2
             global s3
@@ -98,6 +101,8 @@ def handle_client(client_socket):
                 retry_max = data['retry_max'] = cf.GetInt('配置', 'retry_max')
                 output = data['output'] = cf.GetBool('配置', 'output')
                 time_out = data['time_out'] = cf.GetInt('配置', 'time_out')
+                error_info = data['error_info'] = cf.GetBool('配置', 'error_info')
+                spider_after_download = data['spider_after_download'] = cf.GetBool('配置', 'spider_after_download')
                 client_socket.send(json.dumps(data).encode())
             elif uri == 'option':
                 thread = str_to_bool(data_dict['thread'])
@@ -112,6 +117,10 @@ def handle_client(client_socket):
                 cf.Update('配置', 'output', str(output))
                 time_out = int(data_dict['time_out'])
                 cf.Update('配置', 'time_out', str(time_out))
+                error_info = str_to_bool(data_dict['error_info'])
+                cf.Update('配置', 'error_info', str(error_info))
+                spider_after_download = str_to_bool(data_dict['spider_after_download'])
+                cf.Update('配置', 'spider_after_download', str(spider_after_download))
                 data = {'msg': 'ok'}
                 client_socket.send(json.dumps(data).encode())
             elif uri == '1':
@@ -249,6 +258,8 @@ def init():
     global retry_max
     global output
     global time_out
+    global error_info
+    global spider_after_download
     configdir = 'config.ini'
     if not os.path.exists(configdir):
         f = open(configdir, 'a')
@@ -260,6 +271,8 @@ def init():
         cf.Add('配置', 'retry_max', str(retry_max))
         cf.Add('配置', 'output', str(output))
         cf.Add('配置', 'time_out', str(time_out))
+        cf.Add('配置', 'error_info', str(error_info))
+        cf.Add('配置', 'spider_after_download', str(spider_after_download))
     else:
         cf = Config(configdir)
         thread = cf.GetBool('配置', 'thread')
@@ -321,6 +334,7 @@ def txt_download(obj):
     url_lists = [(obj, url) for url in obj.url_list]
     obj.count = 0
     obj.retry_num = 0
+    obj.time_out_retry_num = 0
     ThreadPool(threads_num).map(img_download, url_lists)
 
 
@@ -338,12 +352,11 @@ def download(obj):
         os.mkdir('img/' + obj.name + '/')
     obj.count = 0
     obj.retry_num = 0
+    obj.time_out_retry_num = 0
     ThreadPool(threads_num).map(img_download, url_lists)
 
 
 def img_download(args):
-    global time_out_retry_num
-    global retry_num
     obj, url = args
     if obj.name != '':
         path = 'img/' + obj.name + '/'
@@ -375,13 +388,16 @@ def img_download(args):
             progress_bar(obj, '下载进度')
             break
         except requests.exceptions.ReadTimeout:
-            time_out_retry_num += 1
-            # print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+            obj.time_out_retry_num += 1
+            if error_info:
+                print('\n\033[0;37;41m超时重试%d次。\033[0m' % obj.time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
-            if (retry and (retry_num < retry_max)):
-                retry_num += 1
-                # print('第%d次重试' % retry_num)
+            if error_info:
+                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (obj.retry_num < retry_max)):
+                obj.retry_num += 1
+                if error_info:
+                    print('第%d次重试' % obj.retry_num)
             else:
                 print('\n下载失败')
 
@@ -408,6 +424,7 @@ class Spider:
         self.sum = self.end_page - self.start_page
         self.count = 0
         self.retry_num = 0
+        self.time_out_retry_num = 0
         ThreadPool(threads_num).map(parse_mul, self.url_lists)
         print()
 
@@ -416,22 +433,27 @@ class Spider:
 
 
 def parse_mul(args):
-    global retry_num
     obj, url = args
     req = Req()
     while True:
         try:
-            response = req.get(url)
+            response = req.get(url, timeout=time_out)
+        except requests.exceptions.ReadTimeout:
+            obj.time_out_retry_num += 1
+            if error_info:
+                print('\n\033[0;37;41m超时重试%d次。\033[0m' % obj.time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
-            if (retry and (retry_num < retry_max)):
-                retry_num += 1
-                # print('第%d次重试' % retry_num)
+            if error_info:
+                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if (retry and (obj.retry_num < retry_max)):
+                obj.retry_num += 1
+                if error_info:
+                    print('第%d次重试' % obj.retry_num)
             else:
                 print('\n爬取失败')
         else:
             if response.status_code != 200:
-                parse_mul(url)
+                parse_mul((obj, url))
                 return
             soup = BeautifulSoup(response.text, features='lxml')
             for i in soup.find_all('figure'):
@@ -449,10 +471,12 @@ def Retry_parameter(obj):
             try:
                 f()
             except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+                if error_info:
+                    print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
                 if (retry and (obj.retry_num < retry_max)):
                     obj.retry_num += 1
-                    print('第%d次重试' % obj.retry_num)
+                    if error_info:
+                        print('第%d次重试' % obj.retry_num)
                     obj.count = 0
                 else:
                     print('\n下载失败')
