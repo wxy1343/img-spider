@@ -8,12 +8,13 @@ class Req:
         self.req = requests.Session()
 
     @retry(stop_max_attempt_number=2)
-    def get(self, url='', headers={}, cookies={}):
+    def get(self, url='', headers={}, cookies={}, timeout=10):
         self.url = url
         self.headers = headers
         self.cookies = cookies
         self.headers['user-agent'] = UserAgent().random
-        self.response = self.req.get(url=self.url, headers=self.headers, cookies=cookies)
+        self.timeout = timeout
+        self.response = self.req.get(url=self.url, headers=self.headers, cookies=self.cookies, timeout=self.timeout)
         self.response.encoding = 'utf-8'
         return self.response
 
@@ -24,7 +25,7 @@ class Req:
         self.cookies = cookies
         self.data = data
         self.headers['user-agent'] = UserAgent().random
-        self.response = self.req.post(url=self.url, headers=self.headers, cookies=cookies, data=data)
+        self.response = self.req.post(url=self.url, headers=self.headers, cookies=self.cookies, data=self.data)
         self.response.encoding = 'utf-8'
         return self.response
 
