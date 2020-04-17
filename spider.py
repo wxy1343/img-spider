@@ -143,6 +143,7 @@ def parse(url, 开始页数, 页数):
 
 def parse_mul(url):
     global retry_num
+    global time_out_retry_num
     req = Req()
     while True:
         try:
