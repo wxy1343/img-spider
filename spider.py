@@ -18,9 +18,10 @@ favorites_index = 0
 thread = True
 threads_num = 100
 retry = True
-retry_max = 2
+retry_max = 999999999
 retry_num = 0
 output = False
+error_info = True
 pool = ThreadPool(threads_num)
 start_time = 0
 end_time = 0
@@ -61,13 +62,15 @@ def img_download(args):
                         f.flush()
         except requests.exceptions.ReadTimeout:
             time_out_retry_num += 1
-            # print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+            if error_info:
+                print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if error_info:
+                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
-                # print('第%d次重试' % retry_num)
-                # count = 0
+                if error_info:
+                    print('第%d次重试' % retry_num)
             else:
                 print('\n下载失败')
                 print('感谢您的使用！')
@@ -98,6 +101,7 @@ def init():
     global retry_max
     global output
     global time_out
+    global error_info
     if not os.path.exists(configdir):
         f = open(configdir, 'a')
         f.close()
@@ -108,14 +112,16 @@ def init():
         cf.Add('配置', 'retry_max', str(retry_max))
         cf.Add('配置', 'output', str(output))
         cf.Add('配置', 'time_out', str(time_out))
+        cf.Add('配置', 'error_info', str(error_info))
     else:
-        cf = Config(configdir)
+        cf = Config(configdir, '配置')
         thread = cf.GetBool('配置', 'thread')
         threads_num = cf.GetInt('配置', 'threads_num')
         retry = cf.GetBool('配置', 'retry')
         retry_max = cf.GetInt('配置', 'retry_max')
         output = cf.GetBool('配置', 'output')
         time_out = cf.GetInt('配置', 'time_out')
+        error_info = cf.GetBool('配置', 'error_info')
     if not thread:
         threads_num = 1
 
@@ -140,12 +146,18 @@ def parse_mul(url):
     req = Req()
     while True:
         try:
-            response = req.get(url)
+            response = req.get(url, timeout=time_out)
+        except requests.exceptions.ReadTimeout:
+            time_out_retry_num += 1
+            if error_info:
+                print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-            # print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if error_info:
+                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
-                # print('第%d次重试' % retry_num)
+                if error_info:
+                    print('第%d次重试' % retry_num)
             else:
                 print('\n爬取失败')
                 print('感谢您的使用！')
@@ -216,10 +228,12 @@ def Retry(f):
         try:
             f()
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
-            print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+            if error_info:
+                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
-                print('第%d次重试' % retry_num)
+                if error_info:
+                    print('第%d次重试' % retry_num)
                 count = 0
             else:
                 print('\n下载失败')
@@ -238,6 +252,7 @@ def favorites(name, url):
     global sum
     global count
     global retry_num
+    global time_out_retry_num
     开始页数, 页数 = page()
     url_lists = []
     for i in range(开始页数, 页数):
@@ -269,6 +284,7 @@ def favorites(name, url):
     start_time = time.time()
     count = 0
     retry_num = 0
+    time_out_retry_num = 0
     pool.map(img_download, url_lists)
     print('\n下载完成')
     end_time = time.time()
@@ -299,6 +315,7 @@ def txt_spider():
     global sum
     global count
     global retry_num
+    global time_out_retry_num
     path = input('请输入文本路径：')
     name = path.split('\\')[-1].split('.')[0]
     if not os.path.exists('img/' + name + '/'):
@@ -311,6 +328,7 @@ def txt_spider():
     sum = len(url_list)
     count = 0
     retry_num = 0
+    time_out_retry_num = 0
     pool.map(img_download, url_list)
     print()
     print('下载完成')
@@ -334,6 +352,7 @@ def main():
     global favorites_index
     global count
     global retry_num
+    global time_out_retry_num
     pool = ThreadPool(threads_num)
     name = ''
     while True:
@@ -440,6 +459,7 @@ def main():
         start_time = time.time()
         count = 0
         retry_num = 0
+        time_out_retry_num = 0
         pool.map(img_download, url_lists)
         print()
         print('下载完成')
