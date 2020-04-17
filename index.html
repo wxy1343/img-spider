@@ -133,6 +133,8 @@
                     $('#set #retry_max').val(data['retry_max'])
                     $('#set #output').prop('checked', data['output'])
                     $('#set #time_out').val(data['time_out'])
+                    $('#set #error_info').prop('checked', data['error_info'])
+                    $('#set #spider_after_download').prop('checked', data['spider_after_download'])
                 }
             })
         }
@@ -144,7 +146,9 @@
                 retry: $('#set #retry').is(':checked'),
                 retry_max: $('#set #retry_max').val(),
                 output: $('#set #output').is(':checked'),
-                time_out: $('#set #time_out').val()
+                time_out: $('#set #time_out').val(),
+                error_info: $('#set #error_info').is(':checked'),
+                spider_after_download: $('#set #spider_after_download').is(':checked')
             }
             console.log(option_json);
             $.ajax({
@@ -197,6 +201,8 @@
                                             $(obj.label + ' .info').html('爬取完毕')
                                             obj.timer = null
                                             obj.finish = true
+                                            if ($('#set #spider_after_download').is(':checked'))
+                                                $(obj.label + ' .download').trigger('click')
                                         }
                                     }
                                 }
@@ -524,6 +530,12 @@
         <br>
         <span>超时重试时间</span>
         <input type="number" id="time_out">
+        <br>
+        <span>是否输出错误信息</span>
+        <input type="checkbox" id="error_info">
+        <br>
+        <span>是否爬取完自动下载</span>
+        <input type="checkbox" id="spider_after_download">
         <br>
         <input type="button" value="刷新" onclick="get_set()">
         <input type="button" value="保存" onclick="option()">
