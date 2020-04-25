@@ -6,6 +6,7 @@ import os
 import sys
 from config import *
 from bs4 import BeautifulSoup
+from threading import Lock
 from multiprocessing.dummy import Pool as ThreadPool
 
 requests.packages.urllib3.disable_warnings()
@@ -27,6 +28,7 @@ start_time = 0
 end_time = 0
 time_out_retry_num = 0
 time_out = 10
+lock = Lock()
 
 
 def img_download(args):
@@ -63,22 +65,27 @@ def img_download(args):
         except requests.exceptions.ReadTimeout:
             time_out_retry_num += 1
             if error_info:
-                print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+                with lock:
+                    print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
             if error_info:
-                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+                with lock:
+                    print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
                 if error_info:
-                    print('第%d次重试' % retry_num)
+                    with lock:
+                        print('第%d次重试' % retry_num)
             else:
-                print('\n下载失败')
-                print('感谢您的使用！')
-                input('按Enter键退出')
+                with lock:
+                    print('\n下载失败')
+                    print('感谢您的使用！')
+                    input('按Enter键退出')
                 sys.exit()
         else:
             break
-    progress_bar('下载进度', sum)
+    with lock:
+        progress_bar('下载进度', sum)
 
 
 def progress_bar(text, sum):
@@ -151,18 +158,22 @@ def parse_mul(url):
         except requests.exceptions.ReadTimeout:
             time_out_retry_num += 1
             if error_info:
-                print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
+                with lock:
+                    print('\n\033[0;37;41m超时重试%d次。\033[0m' % time_out_retry_num)
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
             if error_info:
-                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+                with lock:
+                    print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
                 if error_info:
-                    print('第%d次重试' % retry_num)
+                    with lock:
+                        print('第%d次重试' % retry_num)
             else:
-                print('\n爬取失败')
-                print('感谢您的使用！')
-                input('按Enter键退出')
+                with lock:
+                    print('\n爬取失败')
+                    print('感谢您的使用！')
+                    input('按Enter键退出')
                 sys.exit()
         else:
             if response.status_code != 200:
@@ -230,16 +241,19 @@ def Retry(f):
             f()
         except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
             if error_info:
-                print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
+                with lock:
+                    print('\n\033[0;37;41m远程主机强迫关闭了一个现有的连接。\033[0m')
             if (retry and (retry_num < retry_max)):
                 retry_num += 1
                 if error_info:
-                    print('第%d次重试' % retry_num)
+                    with lock:
+                        print('第%d次重试' % retry_num)
                 count = 0
             else:
-                print('\n下载失败')
-                print('感谢您的使用！')
-                input('按Enter键退出')
+                with lock:
+                    print('\n下载失败')
+                    print('感谢您的使用！')
+                    input('按Enter键退出')
                 sys.exit()
         else:
             break
@@ -265,7 +279,6 @@ def favorites(name, url):
     retry_num = 0
     if thread:
         pool.map(parse_mul, url_lists)
-        print()
     else:
         parse(url, 开始页数, 页数)
     url_lists = [(name, url) for url in url_list]
@@ -273,7 +286,7 @@ def favorites(name, url):
     if (sum == 0):
         print('\033[0;37;41m"%s"为空,正在爬取下一个！\033[0m' % name)
         return
-    print('爬取完毕')
+    print('\n爬取完毕')
     if output:
         to_txt(url_list)
         return
@@ -297,14 +310,14 @@ def read_txt(path):
     with open(path, 'r') as f:
         for i in f.readlines():
             if i != '':
-                list.append(i.strip().replace('\r\n', ''))
+                list.append(i.strip().replace('\n', ''))
         return list
 
 
 def to_txt(list):
     txt = ''
     for i in list:
-        txt += i + '\r\n'
+        txt += i + '\n'
     txt = txt[:-1]
     if not os.path.exists('output'):
         os.mkdir('output')
@@ -317,26 +330,34 @@ def txt_spider():
     global count
     global retry_num
     global time_out_retry_num
+    global favorites_url_list
+    global url_list
     path = input('请输入文本路径：')
     name = path.split('\\')[-1].split('.')[0]
-    if not os.path.exists('img/' + name + '/'):
-        os.mkdir('img/' + name + '/')
-    url_list = read_txt(path)
-    url_list = list(set(url_list))
-    url_list = [(name, url) for url in url_list]
-    print('开始下载')
-    start_time = time.time()
-    sum = len(url_list)
-    count = 0
-    retry_num = 0
-    time_out_retry_num = 0
-    pool.map(img_download, url_list)
-    print()
-    print('下载完成')
-    end_time = time.time()
-    print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
-    print('感谢您的使用！')
-    input('按Enter键退出')
+    l = read_txt(path)
+    for url in l:
+        url_list=[]
+        count=0
+        print('正在爬取：' + url)
+        if re.match('^(https://|http://|)wallhaven.cc($|/.*\?|/.*$|/)', url) != None:
+            if '&page=' in url:
+                url = url.split('&page=')[0] + '&'
+            elif '?page=' in url:
+                url = url.split('?page=')[0] + '?'
+            elif re.match('.*favorites($|/$)', url):
+                start_time = time.time()
+                print('正在爬取收藏中...')
+                favorites_url_list = parse_favorites(url.rstrip())
+                end_time = time.time()
+                print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+            elif url.rstrip()[-1] == '/':
+                url = url[:-1] + '?'
+            else:
+                url = url.rstrip() + '?'
+            spider(url, name, False)
+    with lock:
+        print('感谢您的使用！')
+        input('按Enter键退出')
 
 
 def main():
@@ -387,10 +408,13 @@ def main():
             break
         elif 序号 == '5':
             while True:
-                url = input('请输入自定义网址：').strip()
+                with lock:
+                    url = input('请输入自定义网址：').strip()
                 if re.match('^(https://|http://|)wallhaven.cc($|/.*\?|/.*$|/)', url) != None:
                     if '&page=' in url:
                         url = url.split('&page=')[0] + '&'
+                    elif '?page=' in url:
+                        url = url.split('?page=')[0] + '?'
                     elif re.match('.*favorites($|/$)', url):
                         start_time = time.time()
                         print('正在爬取收藏中...')
@@ -410,6 +434,17 @@ def main():
         else:
             print('\033[0;37;41m请输入正确的序号！\033[0m')
             continue
+    print(url)
+    spider(url, name)
+
+
+def spider(url='', name='', flag=True):
+    global favorites_url_list
+    global count
+    global url_list
+    global sum
+    global retry_num
+    global time_out_retry_num
     name = name.replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"',
                                                                                                               '').replace(
         '<', '').replace('>', '').replace('|', '')
@@ -432,29 +467,34 @@ def main():
         for i in range(开始页数, 页数):
             url_lists.append(url + 'page=' + str(i + 1))
         sum = 页数 - 开始页数
-        print('开始爬取...')
+        with lock:
+            print('开始爬取...')
         start_time = time.time()
         count = 0
         retry_num = 0
         if thread:
             pool.map(parse_mul, url_lists)
-            print()
         else:
             parse(url, 开始页数, 页数)
         sum = len(url_list)
-        if (sum == 0):
-            print('\033[0;37;41m没有匹配的结果，换个关键词试试吧！\033[0m')
+        if sum == 0 and flag:
+            with lock:
+                print('\033[0;37;41m没有匹配的结果，换个关键词试试吧！\033[0m')
             main()
         end_time = time.time()
-        print('爬取完毕')
-        print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+        with lock:
+            print('\n爬取完毕')
+            print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
         if output:
             to_txt(url_list)
-            print('感谢您的使用！')
-            input('按Enter键退出')
-            sys.exit()
+            if flag:
+                with lock:
+                    print('感谢您的使用！')
+                    input('按Enter键退出')
+                sys.exit()
         url_lists = [(name, url) for url in url_list]
-        print('开始下载')
+        with lock:
+            print('开始下载')
         if not os.path.exists('img/' + name + '/'):
             os.mkdir('img/' + name + '/')
         start_time = time.time()
@@ -462,12 +502,14 @@ def main():
         retry_num = 0
         time_out_retry_num = 0
         pool.map(img_download, url_lists)
-        print()
-        print('下载完成')
-        end_time = time.time()
-        print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
-    print('感谢您的使用！')
-    input('按Enter键退出')
+        with lock:
+            print('\n下载完成')
+            end_time = time.time()
+            print('\033[0;37;42m耗时%f秒\033[0m' % (end_time - start_time))
+    if flag:
+        with lock:
+            print('感谢您的使用！')
+            input('按Enter键退出')
 
 
 if __name__ == '__main__':
