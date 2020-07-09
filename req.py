@@ -1,6 +1,8 @@
 import requests
 from retrying import retry
-from fake_useragent import UserAgent
+
+
+# from fake_useragent import UserAgent
 
 
 class Req:
@@ -12,7 +14,8 @@ class Req:
         self.url = url
         self.headers = headers
         self.cookies = cookies
-        self.headers['user-agent'] = UserAgent().random
+        self.headers[
+            'user-agent'] = 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.17 Safari/537.36'
         self.timeout = timeout
         self.response = self.req.get(url=self.url, headers=self.headers, cookies=self.cookies, timeout=self.timeout)
         self.response.encoding = 'utf-8'
@@ -24,7 +27,8 @@ class Req:
         self.headers = headers
         self.cookies = cookies
         self.data = data
-        self.headers['user-agent'] = UserAgent().random
+        self.headers[
+            'user-agent'] = 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.17 Safari/537.36'
         self.response = self.req.post(url=self.url, headers=self.headers, cookies=self.cookies, data=self.data)
         self.response.encoding = 'utf-8'
         return self.response
