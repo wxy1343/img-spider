@@ -202,35 +202,35 @@ def parse_favorites(url):
     return favorites_url_list
 
 
-def page():
-    开始页数 = 0
+def get_page():
+    start_page = 0
     while True:
-        页数 = input('请输入爬取页数：').strip()
-        if re.match('^\d+$', 页数) != None:
+        page = input('请输入爬取页数：').strip()
+        if re.match('^\d+$', page) != None:
             break
-        elif 页数 == '':
-            页数 = 1
+        elif page == '':
+            page = 1
             break
-        elif re.match('^\d+(\s+|,+|-+)\d+$', 页数) != None:
-            if (',' in 页数):
-                开始页数 = 页数.split(',')[0]
-                页数 = 页数.split(',')[-1]
-            if (' ' in 页数):
-                开始页数 = 页数.split()[0]
-                页数 = 页数.split()[-1]
-            if ('-' in 页数):
-                开始页数 = 页数.split('-')[0]
-                页数 = 页数.split('-')[-1]
-            if (int(开始页数) > int(页数)) or (int(开始页数) <= 0):
+        elif re.match('^\d+(\s+|,+|-+)\d+$', page) != None:
+            if (',' in page):
+                start_page = page.split(',')[0]
+                page = page.split(',')[-1]
+            if (' ' in page):
+                start_page = page.split()[0]
+                page = page.split()[-1]
+            if ('-' in page):
+                start_page = page.split('-')[0]
+                page = page.split('-')[-1]
+            if (int(start_page) > int(page)) or (int(start_page) <= 0):
                 print('\033[0;37;41m你的输入非法，请重新输入！\033[0m')
                 continue
             break
         else:
             print('\033[0;37;41m你的输入非法，请重新输入！\033[0m')
-    if 开始页数 != 0:
-        开始页数 = int(开始页数) - 1
-    页数 = int(页数)
-    return 开始页数, 页数
+    if start_page != 0:
+        start_page = int(start_page) - 1
+    page = int(page)
+    return start_page, page
 
 
 def Retry(f):
@@ -268,11 +268,11 @@ def favorites(name, url):
     global count
     global retry_num
     global time_out_retry_num
-    开始页数, 页数 = page()
+    start_page, page = get_page()
     url_lists = []
-    for i in range(开始页数, 页数):
+    for i in range(start_page, page):
         url_lists.append(url + 'page=' + str(i + 1))
-    sum = 页数 - 开始页数
+    sum = page - start_page
     print('开始爬取...')
     start_time = time.time()
     count = 0
@@ -280,7 +280,7 @@ def favorites(name, url):
     if thread:
         pool.map(parse_mul, url_lists)
     else:
-        parse(url, 开始页数, 页数)
+        parse(url, start_page, page)
     url_lists = [(name, url) for url in url_list]
     sum = len(url_list)
     if (sum == 0):
@@ -379,26 +379,26 @@ def main():
     name = ''
     while True:
         print('1.搜索关键词\n2.最新\n3.排行榜\n4.随机\n5.自定义\n6.文本')
-        序号 = input('请输入序号：')
-        if 序号 == '1':
+        choice = input('请输入序号：')
+        if choice == '1':
             while True:
-                搜索关键词 = input('请输入搜索关键词：').strip()
-                if 搜索关键词 != '':
+                keyword = input('请输入搜索关键词：').strip()
+                if keyword != '':
                     break
                 else:
                     print('\033[0;37;41m关键词不能为空！\033[0m')
-            url = 'https://wallhaven.cc/search?q=' + 搜索关键词 + '&'
-            name = 搜索关键词
+            url = 'https://wallhaven.cc/search?q=' + keyword + '&'
+            name = keyword
             break
-        elif 序号 == '2':
+        elif choice == '2':
             name = 'latest'
             url = 'https://wallhaven.cc/latest?'
             break
-        elif 序号 == '3':
+        elif choice == '3':
             name = 'toplist'
             url = 'https://wallhaven.cc/toplist?'
             break
-        elif 序号 == '4':
+        elif choice == '4':
             seed = input('请输入种子（留空随机种子）：')
             if (seed.strip() == ''):
                 seed = ''.join(random.sample([chr(i) for i in range(65, 91)] + [chr(i) for i in range(97, 123)], 5))
@@ -406,7 +406,7 @@ def main():
             name = seed
             url = 'https://wallhaven.cc/random?seed=' + seed + '&'
             break
-        elif 序号 == '5':
+        elif choice == '5':
             while True:
                 with lock:
                     url = input('请输入自定义网址：').strip()
@@ -428,7 +428,7 @@ def main():
                     break
                 print('\033[0;37;41m你输入的网址有误，请重新输入！\033[0m')
             break
-        elif 序号 == '6':
+        elif choice == '6':
             txt_spider()
             return
         else:
@@ -448,25 +448,25 @@ def spider(url='', name='', flag=True):
     name = name.replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"',
                                                                                                               '').replace(
         '<', '').replace('>', '').replace('|', '')
-    开始页数, 页数 = page()
+    start_page, page = get_page()
     if not os.path.exists('img'):
         os.mkdir('img')
     if (favorites_url_list != []):
-        favorites_url_list = favorites_url_list[开始页数:页数]
-        favorites_index = 开始页数
+        favorites_url_list = favorites_url_list[start_page:page]
+        favorites_index = start_page
         for i in favorites_url_list:
             name, url = i
             print('正在爬取第' + str(favorites_index + 1) + '个：' + name)
-            if (favorites_index < 页数 + 1):
+            if (favorites_index < page + 1):
                 favorites(name, url)
             url_list = []
             count = 0
             favorites_index += 1
     else:
         url_lists = []
-        for i in range(开始页数, 页数):
+        for i in range(start_page, page):
             url_lists.append(url + 'page=' + str(i + 1))
-        sum = 页数 - 开始页数
+        sum = page - start_page
         with lock:
             print('开始爬取...')
         start_time = time.time()
@@ -475,7 +475,7 @@ def spider(url='', name='', flag=True):
         if thread:
             pool.map(parse_mul, url_lists)
         else:
-            parse(url, 开始页数, 页数)
+            parse(url, start_page, page)
         sum = len(url_list)
         if sum == 0 and flag:
             with lock:
